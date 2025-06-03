@@ -227,7 +227,7 @@
     <div class="container">
         <div class="header">
             <h1>📋 TempShare</h1>
-            <p>Shared clipboard for instant data exchange between two users</p>
+            <p>Single shared clipboard for instant data exchange between users</p>
         </div>
 
         <div class="clipboard-area">
@@ -241,7 +241,7 @@
             
             <textarea 
                 id="sharedData" 
-                placeholder="Start typing or paste your data here... Both users will see changes instantly when they refresh or visit the page."
+                placeholder="Start typing or paste your data here... Any user visiting this page will see the same shared content."
             ></textarea>
             
             <div class="button-group">
@@ -256,16 +256,17 @@
 
         <div class="info-box">
             <h3>💡 How it works:</h3>
-            <p><strong>Simple sharing:</strong> Both users visit the same URL. When one person types and saves, the other person can refresh to see the updates.</p>
-            <p><strong>Perfect for:</strong> Code snippets, quick notes, configurations, or any text you need to share back and forth.</p>
+            <p><strong>Single room:</strong> Everyone who visits this URL shares the same clipboard. No unique rooms or IDs needed.</p>
+            <p><strong>Perfect for:</strong> Code snippets, quick notes, configurations, or any text you need to share between exactly two users.</p>
             <p><strong>Auto-save:</strong> Data automatically saves as you type (with a small delay), but you can also manually save anytime.</p>
-            <p><strong>No servers needed:</strong> Everything works through the URL, perfect for GitHub Pages hosting.</p>
+            <p><strong>Simple sharing:</strong> Just share this URL with the other person. When one person types and saves, the other person can refresh to see updates.</p>
         </div>
     </div>
 
     <script>
         let autoSaveTimeout;
         let lastSavedData = '';
+        const STORAGE_KEY = 'tempshare_data'; // Single key for all users
 
         // Load data when page loads
         window.addEventListener('load', function() {
@@ -291,19 +292,19 @@
             
             try {
                 if (data.trim() === '') {
-                    // If empty, just clear the URL
+                    // Clear the URL hash if empty
                     history.replaceState(null, null, window.location.pathname);
                 } else {
-                    // Encode data and update URL
+                    // Always use the same URL structure - no unique IDs
                     const encodedData = btoa(encodeURIComponent(data));
-                    const newUrl = window.location.pathname + '#data=' + encodedData;
+                    const newUrl = window.location.pathname + '#' + encodedData;
                     history.replaceState(null, null, newUrl);
                 }
                 
                 lastSavedData = data;
                 
                 if (!silent) {
-                    showStatus('Data saved successfully! 💾', 'success');
+                    showStatus('Data saved to shared clipboard! 💾', 'success');
                 }
             } catch (error) {
                 showStatus('Error saving data. It might be too large. 😞', 'error');
@@ -313,20 +314,21 @@
         function loadData() {
             const hash = window.location.hash;
             
-            if (!hash || !hash.includes('data=')) {
-                showStatus('No shared data found. Start typing to create! ✨', 'success');
+            if (!hash || hash === '#') {
+                showStatus('Ready to share! Start typing to create shared content. ✨', 'success');
                 return;
             }
 
             try {
-                const encodedData = hash.split('data=')[1];
+                // Remove the # and decode
+                const encodedData = hash.substring(1);
                 const decodedData = decodeURIComponent(atob(encodedData));
                 
                 document.getElementById('sharedData').value = decodedData;
                 lastSavedData = decodedData;
-                showStatus('Shared data loaded! 📄', 'success');
+                showStatus('Shared clipboard loaded! 📄', 'success');
             } catch (error) {
-                showStatus('Error loading data. The URL might be corrupted. 😞', 'error');
+                showStatus('Error loading shared data. The URL might be corrupted. 😞', 'error');
             }
         }
 
@@ -358,11 +360,11 @@
         }
 
         function clearAll() {
-            if (confirm('Are you sure you want to clear all shared data? This will affect both users! 🚨')) {
+            if (confirm('Are you sure you want to clear the shared clipboard? This will affect all users! 🚨')) {
                 document.getElementById('sharedData').value = '';
                 history.replaceState(null, null, window.location.pathname);
                 lastSavedData = '';
-                showStatus('All data cleared! 🧹', 'success');
+                showStatus('Shared clipboard cleared! 🧹', 'success');
             }
         }
 
@@ -389,6 +391,17 @@
                 loadData();
             }
         });
+
+        // Periodic refresh to check for updates from other users
+        setInterval(() => {
+            const currentHash = window.location.hash;
+            const currentData = document.getElementById('sharedData').value;
+            
+            // Only refresh if the textarea is not focused (user isn't typing)
+            if (document.activeElement !== document.getElementById('sharedData')) {
+                loadData();
+            }
+        }, 5000); // Check every 5 seconds
     </script>
 </body>
 </html>
