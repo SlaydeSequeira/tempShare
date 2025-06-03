@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TempShare - Quick Data Sharing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .share-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 15px;
+            color: white;
+        }
+
+        .receive-section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-radius: 15px;
+            color: white;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            margin-bottom: 15px;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .clear-btn {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .clear-btn:hover {
+            background: linear-gradient(135deg, #ee5a24, #ff6b6b);
+        }
+
+        .url-display {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            word-break: break-all;
+            color: #333;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: rgba(46, 213, 115, 0.2);
+            color: #27ae60;
+        }
+
+        .status.error {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .instructions ul {
+            color: #555;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 TempShare</h1>
+            <p>Share data instantly between users - no servers, just URLs!</p>
+        </div>
+
+        <div class="share-section">
+            <div class="section-title">📤 Share Data</div>
+            <textarea id="shareInput" placeholder="Paste your data here to share with others..."></textarea>
+            <div class="button-group">
+                <button onclick="generateShareLink()">Generate Share Link</button>
+                <button onclick="copyToClipboard('shareUrl')">Copy Link</button>
+            </div>
+            <div id="shareUrl" class="url-display" style="display: none;"></div>
+            <div id="shareStatus" class="status" style="display: none;"></div>
+        </div>
+
+        <div class="receive-section">
+            <div class="section-title">📥 Receive Data</div>
+            <textarea id="receiveOutput" placeholder="Received data will appear here..." readonly></textarea>
+            <div class="button-group">
+                <button onclick="loadFromUrl()">Load from Current URL</button>
+                <button onclick="copyToClipboard('receiveOutput')">Copy Data</button>
+            </div>
+            <div id="receiveStatus" class="status" style="display: none;"></div>
+        </div>
+
+        <button class="clear-btn" onclick="clearAll()">🗑️ Clear All Data</button>
+
+        <div class="instructions">
+            <h3>How to use:</h3>
+            <ul>
+                <li><strong>To Share:</strong> Paste your data, click "Generate Share Link", and send the link to others</li>
+                <li><strong>To Receive:</strong> Open a shared link, then click "Load from Current URL"</li>
+                <li><strong>Works offline:</strong> Data is stored in the URL itself, no server required!</li>
+                <li><strong>Security:</strong> Data is encoded but not encrypted - don't share sensitive information</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Load data automatically when page loads
+        window.addEventListener('load', function() {
+            loadFromUrl();
+        });
+
+        function generateShareLink() {
+            const data = document.getElementById('shareInput').value.trim();
+            
+            if (!data) {
+                showStatus('shareStatus', 'Please enter some data to share', 'error');
+                return;
+            }
+
+            try {
+                // Encode the data and create URL
+                const encodedData = btoa(encodeURIComponent(data));
+                const shareUrl = window.location.href.split('#')[0] + '#data=' + encodedData;
+                
+                document.getElementById('shareUrl').textContent = shareUrl;
+                document.getElementById('shareUrl').style.display = 'block';
+                
+                showStatus('shareStatus', 'Share link generated successfully!', 'success');
+            } catch (error) {
+                showStatus('shareStatus', 'Error generating link. Data might be too large.', 'error');
+            }
+        }
+
+        function loadFromUrl() {
+            const hash = window.location.hash;
+            
+            if (!hash || !hash.includes('data=')) {
+                showStatus('receiveStatus', 'No data found in URL. Make sure you opened a valid share link.', 'error');
+                return;
+            }
+
+            try {
+                const encodedData = hash.split('data=')[1];
+                const decodedData = decodeURIComponent(atob(encodedData));
+                
+                document.getElementById('receiveOutput').value = decodedData;
+                showStatus('receiveStatus', 'Data loaded successfully!', 'success');
+            } catch (error) {
+                showStatus('receiveStatus', 'Error loading data. The link might be corrupted.', 'error');
+            }
+        }
+
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = elementId === 'shareUrl' ? element.textContent : element.value;
+            
+            if (!text || text.trim() === '') {
+                const statusId = elementId === 'shareUrl' ? 'shareStatus' : 'receiveStatus';
+                showStatus(statusId, 'Nothing to copy!', 'error');
+                return;
+            }
+
+            navigator.clipboard.writeText(text).then(() => {
+                const statusId = elementId === 'shareUrl' ? 'shareStatus' : 'receiveStatus';
+                const message = elementId === 'shareUrl' ? 'Link copied to clipboard!' : 'Data copied to clipboard!';
+                showStatus(statusId, message, 'success');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                const statusId = elementId === 'shareUrl' ? 'shareStatus' : 'receiveStatus';
+                const message = elementId === 'shareUrl' ? 'Link copied to clipboard!' : 'Data copied to clipboard!';
+                showStatus(statusId, message, 'success');
+            });
+        }
+
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                document.getElementById('shareInput').value = '';
+                document.getElementById('receiveOutput').value = '';
+                document.getElementById('shareUrl').style.display = 'none';
+                document.getElementById('shareStatus').style.display = 'none';
+                document.getElementById('receiveStatus').style.display = 'none';
+                
+                // Clear URL hash
+                history.replaceState(null, null, window.location.pathname);
+                
+                showStatus('receiveStatus', 'All data cleared!', 'success');
+            }
+        }
+
+        function showStatus(elementId, message, type) {
+            const statusEl = document.getElementById(elementId);
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            // Hide status after 5 seconds
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // Handle browser back/forward buttons
+        window.addEventListener('hashchange', function() {
+            loadFromUrl();
+        });
+    </script>
+</body>
+</html>
