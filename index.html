@@ -73,6 +73,13 @@
             animation: pulse 2s infinite;
         }
 
+        .offline-indicator {
+            width: 12px;
+            height: 12px;
+            background: #ff6b6b;
+            border-radius: 50%;
+        }
+
         @keyframes pulse {
             0% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -130,6 +137,12 @@
             transform: translateY(0);
         }
 
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
         .save-btn {
             background: linear-gradient(135deg, #00c9ff, #92fe9d);
             border: none;
@@ -174,6 +187,14 @@
             border: 2px solid rgba(231, 76, 60, 0.5);
         }
 
+        .connection-status {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .info-box {
             background: rgba(255, 255, 255, 0.1);
             padding: 20px;
@@ -194,12 +215,11 @@
             margin-bottom: 10px;
         }
 
-        .auto-save-indicator {
-            font-size: 0.9rem;
-            opacity: 0.8;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: white;
+            font-size: 1.1rem;
         }
 
         @media (max-width: 600px) {
@@ -227,117 +247,150 @@
     <div class="container">
         <div class="header">
             <h1>📋 TempShare</h1>
-            <p>Single shared clipboard for instant data exchange between users</p>
+            <p>Single shared clipboard - One URL, Real-time sync</p>
         </div>
 
         <div class="clipboard-area">
             <div class="section-title">
-                <span>🔄 Shared Clipboard</span>
-                <div class="live-indicator"></div>
-                <div class="auto-save-indicator">
-                    <span>Auto-saves as you type</span>
-                </div>
+                <span>🔄 Global Shared Clipboard</span>
+                <div id="connectionIndicator" class="offline-indicator"></div>
+                <div id="connectionStatus" class="connection-status">Connecting...</div>
+            </div>
+            
+            <div id="loadingMessage" class="loading">
+                🔄 Connecting to Firebase...
             </div>
             
             <textarea 
                 id="sharedData" 
-                placeholder="Start typing or paste your data here... Any user visiting this page will see the same shared content."
+                placeholder="Loading shared clipboard..."
+                disabled
+                style="display: none;"
             ></textarea>
             
-            <div class="button-group">
-                <button class="save-btn" onclick="saveData()">💾 Save Data</button>
+            <div class="button-group" style="display: none;" id="buttonGroup">
+                <button class="save-btn" onclick="saveData()" id="saveBtn">💾 Save Data</button>
                 <button class="copy-btn" onclick="copyData()">📋 Copy All</button>
                 <button onclick="refreshData()">🔄 Refresh</button>
                 <div id="status" class="status"></div>
             </div>
         </div>
 
-        <button class="clear-btn" onclick="clearAll()">🗑️ Clear All Data</button>
+        <button class="clear-btn" onclick="clearAll()" style="display: none;" id="clearBtn">🗑️ Clear All Data</button>
 
         <div class="info-box">
             <h3>💡 How it works:</h3>
-            <p><strong>Single room:</strong> Everyone who visits this URL shares the same clipboard. No unique rooms or IDs needed.</p>
-            <p><strong>Perfect for:</strong> Code snippets, quick notes, configurations, or any text you need to share between exactly two users.</p>
-            <p><strong>Auto-save:</strong> Data automatically saves as you type (with a small delay), but you can also manually save anytime.</p>
-            <p><strong>Simple sharing:</strong> Just share this URL with the other person. When one person types and saves, the other person can refresh to see updates.</p>
+            <p><strong>Single URL:</strong> Everyone who visits this page shares the exact same clipboard. No rooms, no IDs needed.</p>
+            <p><strong>Real-time sync:</strong> Changes appear instantly for all users. Type and see updates live!</p>
+            <p><strong>Perfect for:</strong> Quick sharing between devices, team collaboration, or passing data between people.</p>
+            <p><strong>Always available:</strong> Data persists even when you close the browser. Bookmark this page!</p>
         </div>
     </div>
 
-    <script>
-        let autoSaveTimeout;
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase functions
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set, get, onValue, off } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCTkXAr1l687awF869IxW8Tsj0WaIiHbuU",
+            authDomain: "bctproj.firebaseapp.com",
+            databaseURL: "https://bctproj-default-rtdb.firebaseio.com",
+            projectId: "bctproj",
+            storageBucket: "bctproj.firebasestorage.app",
+            messagingSenderId: "20624431461",
+            appId: "1:20624431461:web:b6a65b6bffa33bd02c298c"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const dataRef = ref(database, 'data');
+
+        let isConnected = false;
         let lastSavedData = '';
-        const STORAGE_KEY = 'tempshare_data'; // Single key for all users
+        let saveTimeout;
+        let isInitialLoad = true;
 
-        // Load data when page loads
-        window.addEventListener('load', function() {
-            loadData();
-            setupAutoSave();
-        });
+        // DOM elements
+        const textarea = document.getElementById('sharedData');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const buttonGroup = document.getElementById('buttonGroup');
+        const clearBtn = document.getElementById('clearBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const connectionIndicator = document.getElementById('connectionIndicator');
+        const connectionStatus = document.getElementById('connectionStatus');
 
-        function setupAutoSave() {
-            const textarea = document.getElementById('sharedData');
-            
-            textarea.addEventListener('input', function() {
-                clearTimeout(autoSaveTimeout);
-                autoSaveTimeout = setTimeout(() => {
+        // Initialize the app
+        function initApp() {
+            // Set up real-time listener
+            onValue(dataRef, (snapshot) => {
+                const data = snapshot.val() || '';
+                
+                if (isInitialLoad) {
+                    // First load - show the interface
+                    loadingMessage.style.display = 'none';
+                    textarea.style.display = 'block';
+                    buttonGroup.style.display = 'flex';
+                    clearBtn.style.display = 'block';
+                    textarea.disabled = false;
+                    textarea.placeholder = "Start typing or paste your data here... Anyone visiting this page will see the same content in real-time.";
+                    
+                    isInitialLoad = false;
+                    updateConnectionStatus(true);
+                }
+                
+                // Update textarea if data is different and user isn't currently typing
+                if (data !== textarea.value && document.activeElement !== textarea) {
+                    textarea.value = data;
+                    lastSavedData = data;
+                    
+                    if (data.trim()) {
+                        showStatus('Content updated! 📄', 'success');
+                    }
+                }
+            }, (error) => {
+                console.error('Firebase error:', error);
+                updateConnectionStatus(false);
+                showStatus('Connection error! Check your internet. 😞', 'error');
+            });
+
+            // Set up auto-save
+            textarea.addEventListener('input', () => {
+                clearTimeout(saveTimeout);
+                saveTimeout = setTimeout(() => {
                     if (textarea.value !== lastSavedData) {
-                        saveData(true); // true = silent save
+                        saveData(true); // Silent save
                     }
                 }, 2000); // Auto-save after 2 seconds of no typing
             });
         }
 
-        function saveData(silent = false) {
-            const data = document.getElementById('sharedData').value;
-            
-            try {
-                if (data.trim() === '') {
-                    // Clear the URL hash if empty
-                    history.replaceState(null, null, window.location.pathname);
-                } else {
-                    // Always use the same URL structure - no unique IDs
-                    const encodedData = btoa(encodeURIComponent(data));
-                    const newUrl = window.location.pathname + '#' + encodedData;
-                    history.replaceState(null, null, newUrl);
-                }
-                
-                lastSavedData = data;
-                
-                if (!silent) {
-                    showStatus('Data saved to shared clipboard! 💾', 'success');
-                }
-            } catch (error) {
-                showStatus('Error saving data. It might be too large. 😞', 'error');
-            }
-        }
-
-        function loadData() {
-            const hash = window.location.hash;
-            
-            if (!hash || hash === '#') {
-                showStatus('Ready to share! Start typing to create shared content. ✨', 'success');
+        // Save data to Firebase
+        window.saveData = function(silent = false) {
+            if (!isConnected) {
+                showStatus('Not connected! Please wait... 🔄', 'error');
                 return;
             }
 
-            try {
-                // Remove the # and decode
-                const encodedData = hash.substring(1);
-                const decodedData = decodeURIComponent(atob(encodedData));
-                
-                document.getElementById('sharedData').value = decodedData;
-                lastSavedData = decodedData;
-                showStatus('Shared clipboard loaded! 📄', 'success');
-            } catch (error) {
-                showStatus('Error loading shared data. The URL might be corrupted. 😞', 'error');
-            }
-        }
+            const data = textarea.value;
+            
+            set(dataRef, data).then(() => {
+                lastSavedData = data;
+                if (!silent) {
+                    showStatus('Data saved! Everyone can see it now! 💾', 'success');
+                }
+            }).catch((error) => {
+                console.error('Save error:', error);
+                showStatus('Failed to save! Check connection. 😞', 'error');
+            });
+        };
 
-        function refreshData() {
-            loadData();
-        }
-
-        function copyData() {
-            const data = document.getElementById('sharedData').value;
+        // Copy data to clipboard
+        window.copyData = function() {
+            const data = textarea.value;
             
             if (!data.trim()) {
                 showStatus('Nothing to copy! 📭', 'error');
@@ -345,63 +398,78 @@
             }
 
             navigator.clipboard.writeText(data).then(() => {
-                showStatus('Data copied to clipboard! 📋', 'success');
+                showStatus('Copied to clipboard! 📋', 'success');
             }).catch(() => {
                 // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = data;
-                document.body.appendChild(textArea);
-                textArea.select();
+                textarea.select();
                 document.execCommand('copy');
-                document.body.removeChild(textArea);
-                
-                showStatus('Data copied to clipboard! 📋', 'success');
+                showStatus('Copied to clipboard! 📋', 'success');
             });
-        }
+        };
 
-        function clearAll() {
-            if (confirm('Are you sure you want to clear the shared clipboard? This will affect all users! 🚨')) {
-                document.getElementById('sharedData').value = '';
-                history.replaceState(null, null, window.location.pathname);
-                lastSavedData = '';
-                showStatus('Shared clipboard cleared! 🧹', 'success');
+        // Refresh data from Firebase
+        window.refreshData = function() {
+            get(dataRef).then((snapshot) => {
+                const data = snapshot.val() || '';
+                textarea.value = data;
+                lastSavedData = data;
+                showStatus('Data refreshed! 🔄', 'success');
+            }).catch((error) => {
+                console.error('Refresh error:', error);
+                showStatus('Failed to refresh! 😞', 'error');
+            });
+        };
+
+        // Clear all data
+        window.clearAll = function() {
+            if (confirm('Are you sure you want to clear the shared clipboard? This will affect ALL users! 🚨')) {
+                set(dataRef, '').then(() => {
+                    textarea.value = '';
+                    lastSavedData = '';
+                    showStatus('Clipboard cleared for everyone! 🧹', 'success');
+                }).catch((error) => {
+                    console.error('Clear error:', error);
+                    showStatus('Failed to clear! 😞', 'error');
+                });
+            }
+        };
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            
+            if (connected) {
+                connectionIndicator.className = 'live-indicator';
+                connectionStatus.textContent = 'Live & Synced';
+                saveBtn.disabled = false;
+            } else {
+                connectionIndicator.className = 'offline-indicator';
+                connectionStatus.textContent = 'Disconnected';
+                saveBtn.disabled = true;
             }
         }
 
-        function showStatus(message, type) {
+        // Show status message
+        window.showStatus = function(message, type) {
             const statusEl = document.getElementById('status');
             statusEl.textContent = message;
             statusEl.className = `status ${type}`;
             statusEl.style.display = 'block';
             
-            // Hide status after 4 seconds
             setTimeout(() => {
                 statusEl.style.display = 'none';
             }, 4000);
-        }
+        };
 
-        // Handle browser back/forward buttons
-        window.addEventListener('hashchange', function() {
-            loadData();
-        });
+        // Start the app
+        initApp();
 
-        // Load data when user comes back to the tab
-        document.addEventListener('visibilitychange', function() {
+        // Handle page visibility change
+        document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                loadData();
+                refreshData();
             }
         });
-
-        // Periodic refresh to check for updates from other users
-        setInterval(() => {
-            const currentHash = window.location.hash;
-            const currentData = document.getElementById('sharedData').value;
-            
-            // Only refresh if the textarea is not focused (user isn't typing)
-            if (document.activeElement !== document.getElementById('sharedData')) {
-                loadData();
-            }
-        }, 5000); // Check every 5 seconds
     </script>
 </body>
 </html>
